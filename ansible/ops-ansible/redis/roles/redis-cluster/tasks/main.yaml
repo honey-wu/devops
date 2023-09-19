@@ -1,0 +1,2 @@
+- import_tasks: redis-install.yml
+- import_tasks: sentinel-install.yml

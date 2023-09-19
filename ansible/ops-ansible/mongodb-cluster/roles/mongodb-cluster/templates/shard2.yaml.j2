@@ -1,0 +1,28 @@
+storage:
+  dbPath: {{ mongodb_data_dir }}/data/shard2
+  journal:
+    enabled: true
+  engine: wiredTiger
+  wiredTiger:
+    engineConfig:
+      cacheSizeGB: {{ mongodb_shard2_cachesizegb }}
+      directoryForIndexes: true
+systemLog:
+  destination: file
+  logAppend: true
+  path: {{ mongodb_data_dir }}/logs/shard2.log
+# network interfaces
+net:
+  port: {{ mongodb_shard2_port }}
+  bindIp: 0.0.0.0
+processManagement:
+  fork: true
+  pidFilePath: /tmp/mongod_shard2.pid
+  timeZoneInfo: /usr/share/zoneinfo
+replication:
+  oplogSizeMB: 7000
+  replSetName: shard2
+sharding:
+  clusterRole: shardsvr
+security:
+  keyFile: {{ mongodb_binary_install_dir }}/mongodb/conf/keyfile

@@ -1,0 +1,4 @@
+[zookeeper]
+zk01 ansible_ssh_host=192.168.52.11 ansible_ssh_user="root" ansible_ssh_pass="123" myid=1
+zk02 ansible_ssh_host=192.168.52.12 ansible_ssh_user="root" ansible_ssh_pass="123" myid=2
+zk03 ansible_ssh_host=192.168.52.13 ansible_ssh_user="root" ansible_ssh_pass="123" myid=3

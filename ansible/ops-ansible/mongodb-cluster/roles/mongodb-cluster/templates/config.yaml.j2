@@ -1,0 +1,32 @@
+# mongod.conf
+# for documentation of all options, see:
+# http://docs.mongodb.org/manual/reference/configuration-options/
+# Where and how to store data.
+storage:
+  dbPath: {{ mongodb_data_dir }}/data/config
+  journal:
+    enabled: true
+  engine: wiredTiger
+  wiredTiger:
+    engineConfig:
+      cacheSizeGB: {{ mongodb_config_cachesizegb }}
+      directoryForIndexes: true
+# where to write logging data.
+systemLog:
+  destination: file
+  logAppend: true
+  path: {{ mongodb_data_dir }}/logs/config.log
+net:
+  port: {{ mongodb_config_port }}
+  bindIp: 0.0.0.0
+processManagement:
+  fork: true
+  pidFilePath: /tmp/mongo_config.pid
+  timeZoneInfo: /usr/share/zoneinfo
+sharding:
+  clusterRole: configsvr
+replication:
+  oplogSizeMB: 7000
+  replSetName: configs
+security:
+  keyFile: {{ mongodb_binary_install_dir }}/mongodb/conf/keyfile

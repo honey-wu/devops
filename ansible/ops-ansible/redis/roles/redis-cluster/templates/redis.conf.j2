@@ -1,0 +1,61 @@
+bind {{ ansible_ssh_host }}
+protected-mode yes
+port {{ item.split(':')[0] }}
+tcp-backlog {{ redis_tcp_backlog }}
+timeout 0
+tcp-keepalive 300
+daemonize no
+supervised no
+pidfile "/var/run/redis_{{ item.split(':')[0] }}.pid"
+loglevel notice
+logfile "{{ redis_data_dir }}/redis{{ item.split(':')[0] }}/logs/redis.log"
+databases 16
+save 900 1
+save 300 10
+save 60 10000
+stop-writes-on-bgsave-error yes
+rdbcompression yes
+rdbchecksum yes
+dbfilename "dump.rdb"
+dir "{{ redis_data_dir }}/redis{{ item.split(':')[0] }}/data"
+{% if identity == "slave" %}
+slaveof {{ redis_master_ip }} {{ item.split(':')[0] }}
+{% else %}
+#slaveof {{ redis_master_ip }} {{ item.split(':')[0] }}
+{% endif %}
+masterauth "{{ item.split(':')[2] }}"
+slave-serve-stale-data yes
+slave-read-only yes
+repl-diskless-sync no
+repl-diskless-sync-delay 5
+repl-disable-tcp-nodelay no
+slave-priority 100
+requirepass "{{ item.split(':')[2] }}"
+maxclients {{ redis_maxclients }}
+maxmemory {{ redis_maxmemory_bytes }}
+appendonly yes
+appendfilename "appendonly.aof"
+appendfsync everysec
+no-appendfsync-on-rewrite no
+auto-aof-rewrite-percentage 100
+auto-aof-rewrite-min-size 64mb
+aof-load-truncated yes
+lua-time-limit 5000
+slowlog-log-slower-than 10000
+slowlog-max-len 128
+latency-monitor-threshold 0
+notify-keyspace-events ""
+hash-max-ziplist-entries 512
+hash-max-ziplist-value 64
+list-max-ziplist-size -2
+list-compress-depth 0
+set-max-intset-entries 512
+zset-max-ziplist-entries 128
+zset-max-ziplist-value 64
+hll-sparse-max-bytes 3000
+activerehashing yes
+client-output-buffer-limit normal 0 0 0
+client-output-buffer-limit slave 256mb 64mb 60
+client-output-buffer-limit pubsub 32mb 8mb 60
+hz 10
+aof-rewrite-incremental-fsync yes

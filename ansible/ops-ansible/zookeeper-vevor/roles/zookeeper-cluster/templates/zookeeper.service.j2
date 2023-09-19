@@ -1,0 +1,17 @@
+[Unit]
+Description=Apache Zookeeper server (Kafka)
+Documentation=http://zookeeper.apache.org
+Requires=network.target remote-fs.target
+After=network.target remote-fs.target
+
+[Service]
+Type=forking
+User=zookeeper
+Group=zookeeper
+Environment=JAVA_HOME={{ zookeeper_binary_install_dir }}/java
+ExecStart={{ zookeeper_binary_install_dir }}/zookeeper/bin/zkServer.sh start
+ExecReload={{ zookeeper_binary_install_dir }}/zookeeper/bin/zkServer.sh restart
+ExecStop={{ zookeeper_binary_install_dir }}/zookeeper/bin/zkServer.sh stop
+
+[Install]
+WantedBy=multi-user.target

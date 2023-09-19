@@ -1,0 +1,14 @@
+systemLog:
+  destination: file
+  logAppend: true
+  path: {{ mongodb_data_dir }}/logs/mongos.log
+# network interfaces
+net:
+  port: {{ mongodb_mongos_port }}
+  bindIp: 0.0.0.0
+processManagement:
+  fork: true
+sharding:
+  configDB: config/mongodb01:20000,mongodb02:20000,mongodb03:20000
+security:
+  keyFile: {{ mongodb_binary_install_dir }}/mongodb/conf/keyfile

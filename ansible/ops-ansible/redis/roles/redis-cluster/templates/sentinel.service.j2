@@ -1,0 +1,16 @@
+[Unit]
+Description=Redis
+After=network.target
+
+[Service]
+Type=forking
+User=redis
+Group=redis
+ExecStart={{ redis_binary_install_dir }}/redis/bin/redis-sentinel  {{ redis_binary_install_dir }}/redis/etc/sentinel{{ redis_sentinel_port }}.conf
+ExecReload=/bin/kill -s HUP $MAINPID 
+ExecStop=/bin/kill -s QUIT $MAINPID 
+Restart=on-failure
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

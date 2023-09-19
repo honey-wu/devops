@@ -1,0 +1,98 @@
+- name: Set a hostname
+  become: true
+  hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Add other nodes to /etc/hosts
+  become: true
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+    line: "{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+  with_items: "{{ groups[group_names.0] | difference(['inventory_hostname']) }}"
+  when: inventory_hostname in groups[group_names.0]
+
+- name: Install requests
+  become: true
+  command: "pip3 install requests==2.27.1"
+
+- name: Create rabbitmq user
+  become: true
+  user:
+    name: "rabbitmq"
+    shell: "/sbin/nologin"
+    state: present
+
+- name: Start docker server
+  systemd:
+    name: docker
+    state: restarted
+
+- name: Ensure rabbitmq_data_path exists.
+  become: true
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0777
+    owner: rabbitmq
+    group: rabbitmq
+  with_items:
+    - "{{ rabbitmq_data_dir }}/etc"
+    - "{{ rabbitmq_data_dir }}/log"
+    - "{{ rabbitmq_data_dir }}/mnesia"
+
+- name: Pull rabbitmq image
+  become: true
+  community.docker.docker_image:
+    name: "rabbitmq:{{ rabbitmq_version }}"
+    source: pull
+
+- name: Start rabbitmq container
+  community.docker.docker_container:
+    name: rabbitmq
+    image: "rabbitmq:{{ rabbitmq_version }}"
+    restart_policy: always
+    network_mode: host
+    hostname: "{{ inventory_hostname }}"
+    ulimits: "nofile:65536:65536"
+    ports:
+      - "{{ tls_port }}:5672"
+      - "{{ web_port }}:15672"
+    volumes:
+      - "{{ rabbitmq_data_dir }}/mnesia:/var/lib/rabbitmq/mnesia"
+      - "{{ rabbitmq_data_dir }}/log:/var/log/rabbitmq/log"
+      - "{{ rabbitmq_data_dir }}/etc:/etc/rabbitmq"
+      - "/etc/hosts:/etc/hosts"
+    env:
+      RABBITMQ_DEFAULT_USER: "{{ rabbitmq_user }}"
+      RABBITMQ_DEFAULT_PASS: "{{ rabbitmq_password }}"
+      RABBITMQ_ERLANG_COOKIE: "rabbitcookie"
+
+- name: Enable RabbitMQ management plugin
+  community.docker.docker_container_exec:
+    container: rabbitmq
+    command: rabbitmq-plugins enable rabbitmq_management
+
+- name: Stop RabbitMQ app
+  community.docker.docker_container_exec:
+    container: rabbitmq
+    command: rabbitmqctl stop_app
+  when: roles == "slave"
+
+- name: Reset RabbitMQ node
+  community.docker.docker_container_exec:
+    container: rabbitmq
+    command: rabbitmqctl reset
+  when: roles == "slave"
+
+- name: Join RabbitMQ cluster
+  community.docker.docker_container_exec:
+    container: rabbitmq
+    command: rabbitmqctl join_cluster rabbit@rabbitmq01
+  when: roles == "slave"
+
+- name: Start RabbitMQ app
+  community.docker.docker_container_exec:
+    container: rabbitmq
+    command: rabbitmqctl start_app
+  when: roles == "slave"

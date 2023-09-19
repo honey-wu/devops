@@ -1,0 +1,10 @@
+- hosts: test1
+  remote_user: root
+  tasks:
+    - name: 111
+      file:
+        path: "{{ item }}"
+        state: directory
+      with_items:
+        - "{{ zookeeper_data_dir }}/data"
+        - "{{ zookeeper_data_dir }}/logs"

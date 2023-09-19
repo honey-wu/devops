@@ -1,0 +1,9 @@
+tickTime=2000
+initLimit=10
+syncLimit=5
+dataDir={{ kafka_data_dir }}/zookeeper-data/data
+dataLogDir={{ kafka_data_dir }}/zookeeper-data/logs
+clientPort={{ zk_clientport }}
+{% for host in ansible_play_batch %}
+server.{{ loop.index }}={{ host }}:{{ zk_communication_port }}:{{ zk_election_port }}
+{% endfor %}

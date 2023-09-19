@@ -1,0 +1,132 @@
+- name: Set a hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+- name: Add other nodes to /etc/hosts
+  lineinfile:
+    path: "/etc/hosts"
+    regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+    line: "{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+  with_items: "{{ groups['kafka'] | difference(['inventory_hostname']) }}"
+- name: Create kafka user
+  user:
+    name: "kafka"
+    shell: "/sbin/nologin"
+    state: present
+
+- name: Ensure download_path exists.
+  file:
+    path: "{{ download_path }}"
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Copy the kafka installation package
+  copy:
+    src: "{{ packages_path }}/kafka_{{ kafka_version }}.tgz"
+    dest: "{{ download_path }}"
+
+- name: Unpack kafka binary
+  unarchive:
+    src: "{{ download_path }}/kafka_{{ kafka_version }}.tgz"
+    dest: "{{ kafka_binary_install_dir }}"
+    owner: kafka
+    group: kafka
+    remote_src: yes
+
+- name: Rename kafka binaries
+  command: "mv {{ kafka_binary_install_dir }}/{{ tar_directory_name }} {{ kafka_binary_install_dir }}/kafka"
+    
+- name: Ensure kafka_data_path exists.
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+    owner: kafka
+    group: kafka
+  with_items:
+    - "{{ kafka_data_dir }}/kafka-data/logs"
+    - "{{ kafka_data_dir }}/zookeeper-data/data"
+    - "{{ kafka_data_dir }}/zookeeper-data/logs"
+    
+- name: Modify Kafka start script
+  lineinfile:
+    path: "{{ kafka_binary_install_dir }}/kafka/bin/kafka-server-start.sh"
+    regexp: "(export KAFKA_HEAP_OPTS=).*$"
+    line: '    export KAFKA_HEAP_OPTS="-Xmx{{ start_jvm_heap_size }} -Xms{{ start_jvm_heap_size }} -XX:+UnlockExperimentalVMOptions -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=$base_dir/../logs"'
+    state: present
+    backup: yes
+
+- name: Modify Kafka run script
+  lineinfile:
+    path: "{{ kafka_binary_install_dir }}/kafka/bin/kafka-run-class.sh"
+    regexp: "(KAFKA_HEAP_OPTS=).*$"
+    line: '    KAFKA_HEAP_OPTS="-Xmx{{ run_jvm_heap_size }} -Xms{{ run_jvm_heap_size }} -XX:+UnlockExperimentalVMOptions"'
+    state: present
+    backup: yes
+
+- name: Copy the myid file
+  template:
+    src: myid.j2
+    dest: "{{ kafka_data_dir }}/zookeeper-data/data/myid"
+    owner: kafka
+    group: kafka
+    mode: 0644
+    
+- name: Copy the zookeeper.properties config file
+  template:
+    src: zookeeper.properties.j2
+    dest: "{{ kafka_binary_install_dir }}/kafka/config/zookeeper.properties"
+    owner: kafka
+    group: kafka
+    mode: 0644
+    backup: yes
+    force: yes
+
+- name: Copy the server.properties config file
+  template:
+    src: server.properties.j2
+    dest: "{{ kafka_binary_install_dir }}/kafka/config/server.properties"
+    owner: kafka
+    group: kafka
+    mode: 0644
+    backup: yes
+    force: yes
+
+- name: Copy the kafka-zookeeper.service systemd service file
+  template:
+    src: kafka-zookeeper.service.j2
+    dest: "/usr/lib/systemd/system/kafka-zookeeper.service"
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart kafka-zookeeper
+
+- name: Copy the kafka.service systemd service file
+  template:
+    src: kafka.service.j2
+    dest: "/usr/lib/systemd/system/kafka.service"
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart kafka
+
+- name: Ensure kafka-zookeeper service is enabled on boot
+  become: true
+  systemd:
+    daemon_reload: true
+    name: kafka-zookeeper.service
+    state: started
+    enabled: true
+  when:
+    - not ansible_check_mode
+
+- name: Ensure kafka service is enabled on boot
+  become: true
+  systemd:
+    daemon_reload: true
+    name: kafka.service
+    state: started
+    enabled: true
+  when:
+    - not ansible_check_mode

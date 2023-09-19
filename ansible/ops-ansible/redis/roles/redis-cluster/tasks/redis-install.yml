@@ -1,0 +1,143 @@
+- name: Set a hostname
+  become: true
+  hostname:
+    name: "{{ inventory_hostname }}"
+  when: project == 'redis'
+
+- name: Add other nodes to /etc/hosts
+  become: true
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+    line: "{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+  with_items: "{{ groups[group_names.0] | difference(['inventory_hostname']) }}"
+  when: project == 'redis' and inventory_hostname in groups[group_names.0]
+
+- name: Install dependent component packages
+  become: true
+  yum:
+    name:
+      - gcc
+      - make
+    state: latest
+
+- name: Create system redis user
+  become: true
+  user:
+    name: "redis"
+    shell: "/sbin/nologin"
+    state: present
+
+- name: Ensure download_path exists.
+  become: true
+  file:
+    path: "{{ download_path }}"
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+  when: project == 'redis'
+
+- name: Copy the redis installation package
+  become: true
+  copy:
+    src: "{{ packages_path }}/redis-{{ redis_version }}.tar.gz"
+    dest: "{{ download_path }}"
+
+- name: Unpack redis binary
+  become: true
+  unarchive:
+    src: "{{ download_path }}/redis-{{ redis_version }}.tar.gz"
+    dest: "{{ redis_binary_install_dir }}"
+    owner: redis
+    group: redis
+    remote_src: true
+  when: project == 'redis'
+
+- name: Propagate redis binaries
+  become: true
+  command: "mv {{ redis_binary_install_dir }}/{{ tar_directory_name }} {{ redis_binary_install_dir }}/redis"
+  when: project == 'redis'
+
+- name: Compile and install redis
+  become: true
+  shell: "cd {{ redis_binary_install_dir }}/redis/src && make && make PREFIX=/usr/local/redis install"
+  when: project == 'redis'
+
+- name: Ensure redis etc path exists.
+  become: true
+  file:
+    path: "{{ redis_binary_install_dir }}/redis/etc"
+    state: directory
+    mode: 0755
+    owner: redis
+    group: redis
+  when: project == 'redis'
+
+- name: Ensure redis_data_path exists.
+  become: true
+  file:
+    path: "{{ redis_data_dir }}/redis{{ item }}/data"
+    state: directory
+    mode: 0755
+    owner: redis
+    group: redis
+  with_items: "{{ redis_port_alias_password | map('split', ':') | map(attribute=0) | list }}"
+  when: project == 'redis'
+
+- name: Ensure redis_logs_path exists.
+  become: true
+  file:
+    path: "{{ redis_data_dir }}/redis{{ item }}/logs"
+    state: directory
+    mode: 0755
+    owner: redis
+    group: redis
+  with_items: "{{ redis_port_alias_password | map('split', ':') | map(attribute='0') | list }}"
+  when: project == 'redis'
+
+- name: Set redis environment variables
+  become: true
+  shell: "if [ `grep {{ redis_binary_install_dir }}/redis/bin /etc/profile |wc -l` -eq 0 ]; then echo 'export PATH=$PATH:{{ redis_binary_install_dir }}/redis/bin' >> /etc/profile && source /etc/profile; else source /etc/profile; fi"
+  when: project == 'redis'
+
+- name: Set Redis master IP variable
+  become: true
+  set_fact:
+    redis_master_ip: "{{ hostvars[item]['ansible_ssh_host'] }}"
+  when: hostvars[item]['identity'] == 'master'
+  with_items: "{{ groups[group_names.0] }}"
+
+- name: Copy the redis.conf file
+  become: true
+  template:
+    src: redis.conf.j2
+    dest: "{{ redis_binary_install_dir }}/redis/etc/redis{{ item.split(':')[0] }}.conf"
+    owner: redis
+    group: redis
+    mode: 0644
+  #with_items: "{{ redis_port_alias_password | map('split', ':') | map(attribute='0') | list | zip(redis_port_alias_password | map('split', ':') | map(attribute='2') | list) | list }}"
+  with_items: "{{ redis_port_alias_password }}"
+  when: project == 'redis'
+
+- name: Copy the redis.service systemd service file
+  become: true
+  template:
+    src: redis.service.j2
+    dest: /usr/lib/systemd/system/redis{{ item }}.service
+    owner: root
+    group: root
+    mode: 0644
+  with_items: "{{ redis_port_alias_password | map('split', ':') | map(attribute='0') | list }}"
+  when: project == 'redis'
+  #notify: restart redis{{ item }}
+
+- name: Ensure redis service is enabled on boot
+  become: true
+  systemd:
+    daemon_reload: true
+    name: redis{{ item }}.service
+    enabled: true
+    state: started
+  with_items: "{{ redis_port_alias_password | map('split', ':') | map(attribute='0') | list }}"
+  when: project == 'redis' and not ansible_check_mode

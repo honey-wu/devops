@@ -1,0 +1,14 @@
+[Unit]
+Description=Elasticsearch
+
+[Service]
+Type=simple
+User=elasticsearch
+Group=elasticsearch
+LimitNOFILE=100000
+LimitNPROC=100000
+ExecStart={{ elasticsearch_binary_install_dir }}/elasticsearch/bin/elasticsearch
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

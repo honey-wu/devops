@@ -1,0 +1,88 @@
+- name: Set a hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Add other nodes to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+    line: "{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+  with_items: "{{ groups[group_names.0] | difference(['inventory_hostname']) }}"
+  when: inventory_hostname in groups[group_names.0]
+
+- name: Create zookeeper user
+  user:
+    name: "zookeeper"
+    shell: "/sbin/nologin"
+    state: present
+
+- name: Ensure download_path exists.
+  file:
+    path: "{{ download_path }}"
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Download the zookeeper installation package
+  get_url:
+    url: "{{ packages_url }}"
+    dest: "{{ download_path }}"
+
+- name: Unpack zookeeper binary
+  unarchive:
+    src: "{{ download_path }}/apache-zookeeper-{{ zookeeper_version }}-bin.tar.gz"
+    dest: "{{ zookeeper_binary_install_dir }}"
+    mode: 0755
+    owner: zookeeper
+    group: zookeeper
+    remote_src: yes
+
+- name: Propagate zookeeper binaries
+  command: "mv {{ zookeeper_binary_install_dir }}/{{ tar_directory_name }} {{ zookeeper_binary_install_dir }}/zookeeper"
+    
+- name: Ensure zookeeper_data_path exists.
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+    owner: zookeeper
+    group: zookeeper
+  with_items:
+    - "{{ zookeeper_data_dir }}/data"
+    - "{{ zookeeper_data_dir }}/logs"
+
+- name: Copy the myid file
+  template:
+    src: myid.j2
+    dest: "{{ zookeeper_data_dir }}/data/myid"
+    owner: zookeeper
+    group: zookeeper
+    mode: 0644
+    
+- name: Copy the zoo.cfg file
+  template:
+    src: zoo.cfg.j2
+    dest: "{{ zookeeper_binary_install_dir }}/zookeeper/conf/zoo.cfg"
+    owner: zookeeper
+    group: zookeeper
+    mode: 0644
+
+- name: Copy the zookeeper.service systemd service file
+  template:
+    src: zookeeper.service.j2
+    dest: /usr/lib/systemd/system/zookeeper.service
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart zookeeper
+
+- name: Ensure zookeeper service is enabled on boot
+  become: true
+  systemd:
+    daemon_reload: true
+    name: zookeeper.service
+    enabled: true
+    state: started
+  when:
+    - not ansible_check_mode

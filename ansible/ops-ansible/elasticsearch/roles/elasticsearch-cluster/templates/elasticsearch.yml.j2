@@ -1,0 +1,10 @@
+cluster.name: {{ cluster_name }}
+node.name: {{ inventory_hostname }}
+path.data: {{ elasticsearch_data_dir }}/data
+#path.repo: ["{{ elasticsearch_data_dir }}/repo-snapshot"]
+path.logs: {{ elasticsearch_data_dir }}/logs
+#bootstrap.memory_lock: true
+network.host: 0.0.0.0
+http.port: {{ http_port }}
+discovery.zen.ping.unicast.hosts: [{% for host in ansible_play_batch %}"{{ host }}"{% if not loop.last %},{% endif %}{% endfor %}]
+discovery.zen.minimum_master_nodes: {{ groups['elasticsearch']|length - 1 }}

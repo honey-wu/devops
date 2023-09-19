@@ -1,0 +1,17 @@
+- name: restart redis{{ redis_port_alias_password.split(':')[0] }}
+  become: true
+  systemd:
+    daemon_reload: true
+    name: redis{{ redis_port_alias_password.split(':')[0] }}.service
+    state: restarted
+  when:
+    - not ansible_check_mode
+
+- name: restart sentinel{{ redis_sentinel_port }}
+  become: true
+  systemd:
+    daemon_reload: true
+    name: sentinel{{ redis_sentinel_port }}.service
+    state: restarted
+  when:
+    - not ansible_check_mode

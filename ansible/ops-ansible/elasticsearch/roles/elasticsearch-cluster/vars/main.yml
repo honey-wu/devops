@@ -1,0 +1,10 @@
+host: "elasticsearch"
+elasticsearch_version: "5.6.15"
+packages_path: "../files"
+download_path: "/software"
+elasticsearch_binary_install_dir: "/usr/local"
+elasticsearch_data_dir: "/data/elasticsearch"
+tar_directory_name: "elasticsearch-5.6.15"
+cluster_name: "my-cluster"
+http_port: 9092
+es_start_jvm_heap_size: "1g"

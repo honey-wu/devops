@@ -1,0 +1,98 @@
+- name: Make sure the redis service is running
+  become: true
+  service:
+    name: redis{{ item }}
+    state: started
+  with_items: "{{ redis_port_alias_password | map('split', ':') | map(attribute='0') | list }}"
+  when: project == 'redis'
+
+- name: Get Redis master IP address
+  become: true
+  #shell: "redis-cli -h {{ ansible_ssh_host }} -p {{ item.split(':')[0] }} -a {{ item.split(':')[2] }} INFO replication | grep master_host: | cut -d ':' -f 2 | tr -d '\r\n'"
+  shell: "redis-cli -h {{ ansible_ssh_host }} -p {{ item.split(':')[0] }} -a {{ item.split(':')[2] }} INFO replication | grep -E 'master_host|master_port' | awk -F: '(NR==1){host=$2} (NR==2){port=$2} END{print port host}'"
+  register: redis_replication_info
+  with_items: "{{ redis_port_alias_password }}"
+  when: project == 'redis'
+
+- name: Set Redis master IP variable
+  set_fact:
+    redis_master_ips: "{{ ansible_play_batch | map('extract', hostvars, 'redis_replication_info') | json_query('[].results[].stdout_lines') | reject('equalto', []) | list }}"
+  when: roles == 'sentinel'
+
+- name: Ensure sentinel_data_path exists.
+  become: true
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+    owner: redis
+    group: redis
+  with_items:
+    - "{{ redis_data_dir }}/sentinel{{ redis_sentinel_port }}/data"
+    - "{{ redis_data_dir }}/sentinel{{ redis_sentinel_port }}/logs"
+  when: roles == 'sentinel'
+
+- name: Unpack redis binary
+  become: true
+  unarchive:
+    src: "{{ download_path }}/redis-{{ redis_version }}.tar.gz"
+    dest: "{{ redis_binary_install_dir }}"
+    owner: redis
+    group: redis
+    remote_src: true
+  when: roles == 'sentinel' and project == 'sentinel' and "not (redis_binary_install_dir + '/redis.exists') | stat"
+
+- name: Propagate redis binaries
+  become: true
+  command: "mv {{ redis_binary_install_dir }}/{{ tar_directory_name }} {{ redis_binary_install_dir }}/redis"
+  when: roles == 'sentinel' and project == 'sentinel' and "not (redis_binary_install_dir + '/redis.exists') | stat"
+
+- name: Compile and install redis
+  become: true
+  shell: "cd {{ redis_binary_install_dir }}/redis/src && make && make PREFIX=/usr/local/redis install"
+  when: roles == 'sentinel' and project == 'sentinel'
+
+- name: Ensure redis etc path exists.
+  become: true
+  file:
+    path: "{{ redis_binary_install_dir }}/redis/etc"
+    state: directory
+    mode: 0755
+    owner: redis
+    group: redis
+  when: roles == 'sentinel' and project == 'sentinel'
+
+- name: Set redis environment variables
+  become: true
+  shell: "if [ `grep {{ redis_binary_install_dir }}/redis/bin /etc/profile |wc -l` -eq 0 ]; then echo 'export PATH=$PATH:{{ redis_binary_install_dir }}/redis/bin' >> /etc/profile && source /etc/profile; else source /etc/profile; fi"
+  when: roles == 'sentinel' and project == 'sentinel'
+
+- name: Copy the sentinel{{ redis_sentinel_port }}.conf file
+  become: true
+  template:
+    src: sentinel.conf.j2
+    dest: "{{ redis_binary_install_dir }}/redis/etc/sentinel{{ redis_sentinel_port }}.conf"
+    owner: redis
+    group: redis
+    mode: 0644
+  when: roles == 'sentinel'
+
+- name: Copy the sentinel{{ redis_sentinel_port }}.service systemd service file
+  become: true
+  template:
+    src: sentinel.service.j2
+    dest: /usr/lib/systemd/system/sentinel{{ redis_sentinel_port }}.service
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart sentinel{{ redis_sentinel_port }}
+
+- name: Ensure sentinel{{ redis_sentinel_port }} service is enabled on boot
+  become: true
+  systemd:
+    daemon_reload: true
+    name: sentinel{{ redis_sentinel_port }}.service
+    enabled: true
+    state: started
+  when:
+    - not ansible_check_mode

@@ -1,0 +1,8 @@
+- name: restart elasticsearch
+  become: true
+  systemd:
+    daemon_reload: true
+    name: elasticsearch.service
+    state: restarted
+  when:
+    - not ansible_check_mode

@@ -1,0 +1,20 @@
+bind 0.0.0.0
+port {{ redis_sentinel_port }}
+daemonize yes
+pidfile /var/run/redis-sentinel.pid
+dir {{ redis_data_dir }}/sentinel{{ redis_sentinel_port }}/data/
+logfile "{{ redis_data_dir }}/sentinel{{ redis_sentinel_port }}/logs/sentinel.log"
+
+{% for config in redis_port_alias_password %}
+{% set redis_port, sentinel_alias, redis_password = config.split(':') %}
+{% for port_ip in redis_master_ips %}
+{% if port_ip[0] == redis_port %}
+sentinel monitor {{ sentinel_alias }} {{ port_ip[1] }} {{ redis_port }} 2
+{% endif %}
+{% endfor %}
+sentinel down-after-milliseconds {{ sentinel_alias }} 30000
+sentinel parallel-syncs {{ sentinel_alias }} 1
+sentinel failover-timeout {{ sentinel_alias }} 180000
+sentinel auth-pass {{ sentinel_alias }} {{ redis_password }}
+
+{% endfor %}

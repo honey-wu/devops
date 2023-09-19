@@ -1,0 +1,40 @@
+- hosts: mid
+  remote_user: root
+  become: true
+  vars:
+    jdk_version: "jdk-8u301"
+    packages_target_path: "/software"
+    package_name: "jdk-8u301-linux-x64.tar.gz"
+    unzip_directory_name: "jdk1.8.0_301"
+    jdk_binary_install_dir: "/usr/local"
+
+  tasks:
+    - name: Ensure packages_path exists.
+      file:
+        path: "{{ packages_target_path }}"
+        state: directory
+        mode: 0755
+        owner: root
+        group: root
+    - name: copy package
+      copy:
+        src: "{{ package_name }}"
+        dest: "{{ packages_target_path }}"
+    - name:
+      unarchive:
+        src: "{{ packages_target_path }}/{{ package_name }}"
+        dest: "{{ jdk_binary_install_dir }}"
+    - name: Propagate jdk binaries
+      command: "mv {{ jdk_binary_install_dir }}/{{ unzip_directory_name }} {{ jdk_binary_install_dir }}/java"
+    - name: set jdk env
+      lineinfile:
+        dest: "/etc/profile"
+        line: "{{ item.value }}"
+        state: present
+      with_items:
+        - {value: "\n#{{ jdk_version }}"}
+        - {value: "export JAVA_HOME={{ jdk_binary_install_dir }}/java"}
+        - {value: "export CLASSPATH=.:$JAVA_HOME/jre:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar"}
+        - {value: "export PATH=$JAVA_HOME/bin:$PATH"}
+    - name: source profile
+      shell: "source /etc/profile"

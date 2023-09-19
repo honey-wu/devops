@@ -1,0 +1,10 @@
+host: "zookeeper"
+zookeeper_version: "3.6.0"
+packages_url: "http://archive.apache.org/dist/zookeeper/zookeeper-3.6.0/apache-zookeeper-3.6.0-bin.tar.gz"
+download_path: "/software"
+zookeeper_binary_install_dir: "/usr/local"
+zookeeper_data_dir: "/data/zookeeper"
+tar_directory_name: "apache-zookeeper-3.6.0-bin"
+zk_communication_port: 2888
+zk_election_port: 3888
+clientport: 2181

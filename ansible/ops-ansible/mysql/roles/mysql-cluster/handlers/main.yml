@@ -1,0 +1,8 @@
+- name: restart mysql
+  become: true
+  systemd:
+    daemon_reload: true
+    name: mysql.service
+    state: restarted
+  when:
+    - not ansible_check_mode

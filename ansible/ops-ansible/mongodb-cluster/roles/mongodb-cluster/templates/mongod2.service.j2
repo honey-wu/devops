@@ -1,0 +1,18 @@
+[Unit]
+Description=MongoDB Database Server
+Documentation=https://docs.mongodb.org/manual
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=mongodb
+Group=mongodb
+Environment="OPTIONS=-f {{ mongodb_binary_install_dir }}/mongodb/conf/shard2.yaml"
+#EnvironmentFile=-/etc/sysconfig/mongod
+ExecStart={{ mongodb_binary_install_dir }}/mongodb/bin/mongod $OPTIONS
+PermissionsStartOnly=true
+#PIDFile=/var/run/mongodb/mongod.pid
+Type=forking
+
+[Install]
+WantedBy=multi-user.target

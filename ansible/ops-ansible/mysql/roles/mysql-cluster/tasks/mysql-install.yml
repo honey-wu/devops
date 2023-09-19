@@ -1,0 +1,101 @@
+- name: Set a hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Add other nodes to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+    line: "{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+  with_items: "{{ groups[group_names.0] | difference(['inventory_hostname']) }}"
+  when: inventory_hostname in groups[group_names.0]
+
+- name: Install dependent component packages
+  yum:
+    name:
+      - libaio
+      - ncurses-libs
+      - MySQL-python
+      - python3-PyMySQL
+    state: latest
+
+- name: Create system mysql user
+  user:
+    name: "mysql"
+    shell: "/sbin/nologin"
+    state: present
+
+- name: Ensure download_path exists.
+  file:
+    path: "{{ download_path }}"
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Copy the mysql installation package
+  copy:
+    src: "{{ packages_path }}/mysql-{{ mysql_version }}-el7-x86_64.tar.gz"
+    dest: "{{ download_path }}"
+
+- name: Unpack mysql binary
+  unarchive:
+    src: "{{ download_path }}/mysql-{{ mysql_version }}-el7-x86_64.tar.gz"
+    dest: "{{ mysql_binary_install_dir }}"
+    owner: mysql
+    group: mysql
+    remote_src: yes
+
+- name: Propagate mysql binaries
+  command: "mv {{ mysql_binary_install_dir }}/{{ tar_directory_name }} {{ mysql_binary_install_dir }}/mysql"
+    
+- name: Ensure mysql_data_path exists.
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+    owner: mysql
+    group: mysql
+  with_items:
+    - "{{ mysql_data_dir }}/data"
+    - "{{ mysql_data_dir }}/logs"
+
+- name: Set mysql environment variables
+  shell: "if [ `grep {{ mysql_binary_install_dir }}/mysql/bin /etc/bashrc |wc -l` -eq 0 ]; then echo 'export PATH=$PATH:{{ mysql_binary_install_dir }}/mysql/bin' >> /etc/bashrc && source /etc/bashrc; else source /etc/bashrc; fi"
+
+- name: Copy the my.cnf.j2 file
+  template:
+    src: my.cnf.j2
+    dest: "{{ mysql_binary_install_dir }}/mysql/my.cnf"
+    owner: mysql
+    group: mysql
+    mode: 0644
+
+- name: Copy the mysql.service systemd service file
+  template:
+    src: mysql.service.j2
+    dest: /usr/lib/systemd/system/mysql.service
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart mysql
+
+- name: init mysql
+  shell: "sudo {{ mysql_binary_install_dir }}/mysql/bin/mysqld  --defaults-file={{ mysql_binary_install_dir }}/mysql/my.cnf --user=mysql --initialize --basedir={{ mysql_binary_install_dir }}/mysql --datadir={{ mysql_data_dir }}/data/"
+
+- name: Ensure mysql service is enabled on boot
+  become: true
+  systemd:
+    daemon_reload: true
+    name: mysql.service
+    enabled: true
+    state: started
+  when:
+    - not ansible_check_mode
+
+- name: Get initial MySQL root password
+  shell: "cat {{ mysql_data_dir }}/logs/mysql-error.log | grep 'A temporary password' | awk '{print $NF}'"
+  register: mysql_initial_root_password
+
+- name: Set MySQL root password
+  shell: "{{ mysql_binary_install_dir }}/mysql/bin/mysql -uroot -p'{{ mysql_initial_root_password.stdout }}' --connect-expired-password -e \"ALTER USER 'root'@'localhost' IDENTIFIED WITH 'mysql_native_password' BY '{{ mysql_new_root_password }}';\""

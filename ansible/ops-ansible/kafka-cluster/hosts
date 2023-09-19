@@ -1,0 +1,4 @@
+[kafka]
+kafka01 ansible_ssh_host=192.168.52.11 ansible_ssh_user="root" ansible_ssh_pass="123" zk_myid=1 broker_id=1
+kafka02 ansible_ssh_host=192.168.52.12 ansible_ssh_user="root" ansible_ssh_pass="123" zk_myid=2 broker_id=2
+kafka03 ansible_ssh_host=192.168.52.13 ansible_ssh_user="root" ansible_ssh_pass="123" zk_myid=3 broker_id=3

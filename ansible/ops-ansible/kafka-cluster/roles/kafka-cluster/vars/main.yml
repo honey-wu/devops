@@ -1,0 +1,13 @@
+host: "kafka"
+kafka_version: "2.13-2.8.0"
+packages_path: "../files"
+download_path: "/software"
+kafka_binary_install_dir: "/usr/local"
+kafka_data_dir: "/data/kafka"
+tar_directory_name: "kafka_2.13-2.8.0"
+zk_communication_port: 4888
+zk_election_port: 5888
+zk_clientport: 2181
+kafka_port: 9092
+start_jvm_heap_size: "1G"
+run_jvm_heap_size: "1G"

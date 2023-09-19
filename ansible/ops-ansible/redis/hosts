@@ -1,0 +1,4 @@
+[redis]
+redis01 ansible_ssh_host=192.168.52.12 ansible_ssh_user="root" ansible_ssh_pass="123" project=redis roles=sentinel identity=master
+redis02 ansible_ssh_host=192.168.52.13 ansible_ssh_user="root" ansible_ssh_pass="123" project=redis roles=sentinel identity=slave
+redis03 ansible_ssh_host=192.168.52.14 ansible_ssh_user="root" ansible_ssh_pass="123" project=sentinel roles=sentinel identity=slave

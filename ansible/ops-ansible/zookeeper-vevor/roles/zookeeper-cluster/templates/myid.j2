@@ -1,0 +1,5 @@
+{% for host in ansible_play_batch %}
+{% if inventory_hostname == host %}
+{{ myid }}
+{% endif %}
+{% endfor %}

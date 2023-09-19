@@ -1,0 +1,17 @@
+- name: restart kafka-zookeeper
+  become: true
+  systemd:
+    daemon_reload: true
+    name: kafka-zookeeper.service
+    state: restarted
+  when:
+    - not ansible_check_mode
+
+- name: restart kafka
+  become: true
+  systemd:
+    daemon_reload: true
+    name: kafka.service
+    state: restarted
+  when:
+    - not ansible_check_mode

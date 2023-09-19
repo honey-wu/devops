@@ -1,0 +1,13 @@
+- name: Configure mongos add shard
+  become: true
+  community.mongodb.mongodb_shard:
+    login_host: "localhost"
+    login_port: "{{ mongodb_mongos_port }}"
+    login_database: "admin"
+    #login_user: ""
+    #login_password: ""
+    shard:
+      - "shard1/mongodb01:{{ mongodb_shard1_port }},mongodb02:{{ mongodb_shard1_port }},mongodb03:{{ mongodb_shard1_port }}"
+      - "shard2/mongodb01:{{ mongodb_shard2_port }},mongodb02:{{ mongodb_shard2_port }},mongodb03:{{ mongodb_shard2_port }}"
+    atlas_auth: true
+  when: inventory_hostname == "mongodb01"

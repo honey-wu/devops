@@ -1,0 +1,4 @@
+- hosts: rabbitmq
+  become: true
+  roles:
+    - docker-install-rabbitmq

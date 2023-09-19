@@ -1,0 +1,15 @@
+[Unit]
+Description=Redis
+After=network.target
+
+[Service]
+Type=simple
+User=redis
+Group=redis
+ExecStart={{ redis_binary_install_dir }}/redis/bin/redis-server {{ redis_binary_install_dir }}/redis/etc/redis{{ item }}.conf
+ExecReload=/bin/kill -s HUP $MAINPID 
+ExecStop=/bin/kill -s QUIT $MAINPID 
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

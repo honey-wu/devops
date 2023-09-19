@@ -1,0 +1,10 @@
+host: "rabbitmq"
+rabbitmq_version: "3.7.28-management-alpine"
+rabbitmq_data_dir: "/data/rabbitmq"
+web_port: 15672
+tls_port: 5672
+rabbitmq_cpu: "2"
+rabbitmq_memory: "4g"
+rabbitmq_user: "admin"
+rabbitmq_password: "123456"
+ansible_python_interpreter: /usr/bin/python3

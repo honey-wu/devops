@@ -1,0 +1,6 @@
+jdk_version: "jdk-8u301"
+download_path: "../files"
+packages_target_path: "/software"
+package_name: "jdk-8u301-linux-x64.tar.gz"
+unzip_directory_name: "jdk1.8.0_301"
+jdk_binary_install_dir: "/usr/local"

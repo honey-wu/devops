@@ -1,0 +1,278 @@
+- name: Set a hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Add other nodes to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+    line: "{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+  with_items: "{{ groups[group_names.0] | difference(['inventory_hostname']) }}"
+  when: inventory_hostname in groups[group_names.0]
+
+- name: Create mongodb user
+  user:
+    name: "mongodb"
+    shell: "/sbin/nologin"
+    state: present
+
+- name: Ensure download_path exists.
+  file:
+    path: "{{ download_path }}"
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Install a list of packages
+  yum:
+    name:
+      - libcurl
+      - openssl
+      - xz-libs
+    state: present
+
+- name: Pip install pymongo packages
+  pip:
+    name: pymongo
+    executable: pip3
+
+- name: Copy the mongodb installation package
+  copy:
+    src: "{{ packages_path }}/{{ tar_directory_name }}.tgz"
+    dest: "{{ download_path }}"
+
+- name: Unpack mongodb binary
+  unarchive:
+    src: "{{ download_path }}/{{ tar_directory_name }}.tgz"
+    dest: "{{ mongodb_binary_install_dir }}"
+    owner: mongodb
+    group: mongodb
+    remote_src: yes
+
+- name: Propagate mongodb binaries
+  command: "mv {{ mongodb_binary_install_dir }}/{{ tar_directory_name }} {{ mongodb_binary_install_dir }}/mongodb"
+
+- name: Ensure mongodb conf path exists.
+  become: true
+  file:
+    path: "{{ mongodb_binary_install_dir }}/mongodb/conf"
+    state: directory
+    mode: 0755
+    owner: mongodb
+    group: mongodb
+
+- name: Set mongodb environment variables
+  become: true
+  shell: "if [ `grep {{ mongodb_binary_install_dir }}/mongodb/bin /etc/profile |wc -l` -eq 0 ]; then echo 'export PATH=$PATH:{{ mongodb_binary_install_dir }}/mongodb/bin' >> /etc/profile && source /etc/profile; else source /etc/profile; fi"
+
+- name: Ensure mongodb_data_path exists.
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+    owner: mongodb
+    group: mongodb
+  with_items:
+    - "{{ mongodb_data_dir }}/data/config"
+    - "{{ mongodb_data_dir }}/data/shard1"
+    - "{{ mongodb_data_dir }}/data/shard2"
+    - "{{ mongodb_data_dir }}/logs"
+
+- name: Copy the config.yaml template file
+  template:
+    src: config.yaml.j2
+    dest: "{{ mongodb_binary_install_dir }}/mongodb/conf/config.yaml"
+    owner: mongodb
+    group: mongodb
+    mode: 0644
+
+- name: Copy the mongo-config.service systemd service template file
+  template:
+    src: mongo-config.service.j2
+    dest: /usr/lib/systemd/system/mongo-config.service
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Copy the shard1.yaml template file
+  template:
+    src: shard1.yaml.j2
+    dest: "{{ mongodb_binary_install_dir }}/mongodb/conf/shard1.yaml"
+    owner: mongodb
+    group: mongodb
+    mode: 0644
+
+- name: Copy the mongod1.service systemd service template file
+  template:
+    src: mongod1.service.j2
+    dest: /usr/lib/systemd/system/mongod1.service
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Copy the shard2.yaml template file
+  template:
+    src: shard2.yaml.j2
+    dest: "{{ mongodb_binary_install_dir }}/mongodb/conf/shard2.yaml"
+    owner: mongodb
+    group: mongodb
+    mode: 0644
+
+- name: Copy the mongod2.service systemd service template file
+  template:
+    src: mongod2.service.j2
+    dest: /usr/lib/systemd/system/mongod2.service
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Copy the mongos.yaml template file
+  template:
+    src: mongos.yaml.j2
+    dest: "{{ mongodb_binary_install_dir }}/mongodb/conf/mongos.yaml"
+    owner: mongodb
+    group: mongodb
+    mode: 0644
+
+- name: Copy the mongos.service systemd service template file
+  template:
+    src: mongos.service.j2
+    dest: /usr/lib/systemd/system/mongos.service
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Generate key file
+  become: true
+  shell: "openssl rand -base64 700 > {{ mongodb_binary_install_dir }}/mongodb/conf/keyfile && chmod 600 {{ mongodb_binary_install_dir }}/mongodb/conf/keyfile"
+  when: inventory_hostname == "mongodb01"
+
+- name: Get the keyfile on mongodb01
+  fetch:
+    src: "{{ mongodb_binary_install_dir }}/mongodb/conf/keyfile"
+    dest: "/tmp/keyfile"
+    flat: yes
+  when: inventory_hostname == "mongodb01"
+
+- name: Copy keyfile to any
+  copy:
+    src: "/tmp/keyfile"
+    dest: "{{ mongodb_binary_install_dir }}/mongodb/conf/"
+    owner: mongodb
+    group: mongodb
+    mode: "600"
+
+- name: Ensure mongo-config service is enabled on boot
+  become: true
+  systemd:
+    daemon_reload: true
+    name: mongo-config.service
+    enabled: true
+    state: started
+
+- name: Configure replica set
+  become: true
+  #shell: "{{ mongodb_binary_install_dir }}/mongodb/bin/mongo --port {{ mongodb_config_port }} --eval \"rs.initiate({_id:'configs', configsvr:true, members:[{_id:0, host:'mongodb01:{{ mongodb_config_port }}'}, {_id:1, host:'mongodb02:{{ mongodb_config_port }}'}, {_id:2, host:'mongodb03:{{ mongodb_config_port }}'}]})\""
+  community.mongodb.mongodb_replicaset:
+    login_host: "localhost"
+    login_port: "{{ mongodb_config_port }}"
+    login_database: "admin"
+    replica_set: "configs"
+    members:
+    - _id: 0
+      host: "mongodb01:{{ mongodb_config_port }}"
+    - _id: 1
+      host: "mongodb02:{{ mongodb_config_port }}"
+    - _id: 2
+      host: "mongodb03:{{ mongodb_config_port }}"
+    atlas_auth: true
+  when: inventory_hostname == "mongodb01"
+
+- name: Started shard1 server
+  become: true
+  systemd:
+    daemon_reload: true
+    name: mongod1.service
+    enabled: true
+    state: started
+
+- name: Configure shard replica set 1
+  become: true
+  #shell: "{{ mongodb_binary_install_dir }}/mongodb/bin/mongo --port {{ mongodb_shard1_port }} --eval \"rs.initiate({ _id:'shard1', members:[{_id:0, host:'mongodb01:{{ mongodb_shard1_port }}'}, {_id:1, host:'mongodb02:{{ mongodb_shard1_port }}'}, {_id:2, host:'mongodb03:{{ mongodb_shard1_port }}'}]})\""
+  community.mongodb.mongodb_replicaset:
+    login_host: "localhost"
+    login_port: "{{ mongodb_shard1_port }}"
+    login_database: "admin"
+    replica_set: "shard1"
+    members:
+    - _id: 0
+      host: "mongodb01:{{ mongodb_shard1_port }}"
+    - _id: 1
+      host: "mongodb02:{{ mongodb_shard1_port }}"
+    - _id: 2
+      host: "mongodb03:{{ mongodb_shard1_port }}"
+    atlas_auth: true
+  when: inventory_hostname == "mongodb01"
+
+- name: Started shard2 server
+  become: true
+  systemd:
+    daemon_reload: true
+    name: mongod2.service
+    enabled: true
+    state: started
+
+- name: Configure shard replica set 2
+  become: true
+  #shell: "{{ mongodb_binary_install_dir }}/mongodb/bin/mongo --port {{ mongodb_shard2_port }} --eval \"rs.initiate({ _id:'shard2', members:[{_id:0, host:'mongodb01:{{ mongodb_shard2_port }}'}, {_id:1, host:'mongodb02:{{ mongodb_shard2_port }}'}, {_id:2, host:'mongodb03:{{ mongodb_shard2_port }}'}]})\""
+  community.mongodb.mongodb_replicaset:
+    login_host: "localhost"
+    login_port: "{{ mongodb_shard2_port }}"
+    login_database: "admin"
+    replica_set: "shard2"
+    members:
+    - _id: 0
+      host: "mongodb01:{{ mongodb_shard2_port }}"
+    - _id: 1
+      host: "mongodb02:{{ mongodb_shard2_port }}"
+    - _id: 2
+      host: "mongodb03:{{ mongodb_shard2_port }}"
+    atlas_auth: true
+  when: inventory_hostname == "mongodb01"
+
+- name: Started mongos server
+  become: true
+  systemd:
+    daemon_reload: true
+    name: mongos.service
+    enabled: true
+    state: started
+
+- name: Configure mongos add shard
+  become: true
+  #shell: "{{ mongodb_binary_install_dir }}/mongodb/bin/mongo --port {{ mongodb_mongos_port }} --eval \"{{ item }}\""
+  #with_items:
+  #  - "sh.addShard('shard1/mongodb01:{{ mongodb_shard1_port }},mongodb02:{{ mongodb_shard1_port }},mongodb03:{{ mongodb_shard1_port }}')"
+  #  - "sh.addShard('shard2/mongodb01:{{ mongodb_shard2_port }},mongodb02:{{ mongodb_shard2_port }},mongodb03:{{ mongodb_shard2_port }}')"
+  community.mongodb.mongodb_shard:
+    login_host: "localhost"
+    login_port: "{{ mongodb_mongos_port }}"
+    login_database: "admin"
+    shard:
+      - "shard1/mongodb01:{{ mongodb_shard1_port }},mongodb02:{{ mongodb_shard1_port }},mongodb03:{{ mongodb_shard1_port }}"
+      - "shard2/mongodb01:{{ mongodb_shard2_port }},mongodb02:{{ mongodb_shard2_port }},mongodb03:{{ mongodb_shard2_port }}"
+    atlas_auth: true
+  when: inventory_hostname == "mongodb01"
+
+- name: Create admin user
+  community.mongodb.mongodb_user:
+    login_host: "localhost"
+    login_port: "{{ mongodb_mongos_port }}"
+    login_database: "admin"
+    database: "admin"
+    name: "{{ mongodb_adminroot_user }}"
+    password: "{{ mongodb_adminroot_password }}"
+    roles: "{{ mongodb_adminroot_roles }}"
+    atlas_auth: true
+  when: inventory_hostname == "mongodb01"

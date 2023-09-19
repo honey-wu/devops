@@ -1,0 +1,12 @@
+- hosts: test1
+  remote_user: root
+  tasks:
+  - name: Set hostname
+    hostname:
+      name: "{{ inventory_hostname }}"
+  - name: Add other nodes to /etc/hosts
+    lineinfile:
+      path: /etc/hosts
+      regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+      line: "{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+    with_items: "{{ groups['test1'] | difference(['inventory_hostname']) }}"

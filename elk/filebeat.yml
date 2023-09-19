@@ -1,0 +1,264 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: filebeat
+  namespace: logging
+  labels:
+    k8s-app: filebeat
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: filebeat
+  labels:
+    k8s-app: filebeat
+rules:
+- apiGroups: [""]
+  resources:
+  - namespaces
+  - pods
+  - nodes
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups: ["apps"]
+  resources:
+    - replicasets
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["batch"]
+  resources:
+    - jobs
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: filebeat
+  namespace: logging
+  labels:
+    k8s-app: filebeat
+rules:
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs: ["get", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: filebeat
+subjects:
+- kind: ServiceAccount
+  name: filebeat
+  namespace: logging
+roleRef:
+  kind: ClusterRole
+  name: filebeat
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: filebeat
+  namespace: logging
+subjects:
+  - kind: ServiceAccount
+    name: filebeat
+    namespace: kube-system
+roleRef:
+  kind: Role
+  name: filebeat
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat-config
+  namespace: logging
+  labels:
+    k8s-app: filebeat
+data:
+  filebeat.yml: |-
+    filebeat.inputs:
+    - type: container
+      enabled: true
+      symlinks: true
+      paths:
+        - /var/log/containers/canal-xj4lz_kube-system_calico-node-*.log
+      tags: ["canal-xj4lz_kube-system_calico-node"]
+      fields:
+        application: "canal-xj4lz_kube-system_calico-node"
+
+    - type: container
+      enabled: true
+      symlinks: true
+      paths:
+        - /var/log/containers/canal-xj4lz_kube-system_install-cni-*.log
+      tags: ["canal-xj4lz_kube-system_install-cni"]
+      fields:
+        application: "canal-xj4lz_kube-system_install-cni"
+
+    - type: container
+      enabled: true
+      symlinks: true
+      paths:
+        - /var/log/containers/canal-xj4lz_kube-system_kube-flannel-*.log
+      tags: ["canal-xj4lz_kube-system_kube-flannel"]
+      fields:
+        application: "canal-xj4lz_kube-system_kube-flannel"
+
+    - type: container
+      enabled: true
+      symlinks: true
+      paths:
+        - /var/log/containers/canal-xj4lz_kube-system_mount-bpffs-*.log
+      tags: ["canal-xj4lz_kube-system_mount-bpffs"]
+      fields:
+        application: "canal-xj4lz_kube-system_mount-bpffs"
+
+    - type: container
+      enabled: true
+      symlinks: true
+      paths:
+        - /var/log/containers/controller-844979dcdc-bhcs9_metallb-system_controller-*.log
+      tags: ["controller-844979dcdc-bhcs9_metallb-system_controller"]
+      fields:
+        application: "controller-844979dcdc-bhcs9_metallb-system_controller"
+
+    - type: container
+      enabled: true
+      symlinks: true
+      paths:
+        - /var/log/containers/filebeat-mvwnl_logging_filebeat-*.log
+      tags: ["filebeat-mvwnl_logging_filebeat"]
+      fields:
+        application: "filebeat-mvwnl_logging_filebeat"
+
+    - type: container
+      enabled: true
+      symlinks: true
+      paths:
+        - /var/log/containers/ingress-nginx-admission-create-rgx82_ingress-nginx_create-*.log
+      tags: ["ingress-nginx-admission-create-rgx82_ingress-nginx_create"]
+      fields:
+        application: "ingress-nginx-admission-create-rgx82_ingress-nginx_create"
+
+    - type: container
+      enabled: true
+      symlinks: true
+      paths:
+        - /var/log/containers/ingress-nginx-admission-patch-tm5j8_ingress-nginx_patch-*.log
+      tags: ["ingress-nginx-admission-patch-tm5j8_ingress-nginx_patch"]
+      fields:
+        application: "ingress-nginx-admission-patch-tm5j8_ingress-nginx_patch"
+
+    - type: container
+      enabled: true
+      symlinks: true
+      paths:
+        - /var/log/containers/ingress-nginx-controller-6b94c75599-f57nk_ingress-nginx_controller-*.log
+      tags: ["ingress-nginx-controller-6b94c75599-f57nk_ingress-nginx_controller"]
+      fields:
+        application: "ingress-nginx-controller-6b94c75599-f57nk_ingress-nginx_controller"
+
+    - type: container
+      enabled: true
+      symlinks: true
+      paths:
+        - /var/log/containers/kube-proxy-tzhn2_kube-system_kube-proxy-*.log
+      tags: ["kube-proxy-tzhn2_kube-system_kube-proxy"]
+      fields:
+        application: "kube-proxy-tzhn2_kube-system_kube-proxy"
+
+    - type: container
+      enabled: true
+      symlinks: true
+      paths:
+        - /var/log/containers/speaker-zdj6f_metallb-system_speaker-*.log
+      tags: ["speaker-zdj6f_metallb-system_speaker"]
+      fields:
+        application: "speaker-zdj6f_metallb-system_speaker"
+
+    processors:
+      - add_kubernetes_metadata:
+          host: ${NODE_NAME}
+          matchers:
+          - logs_path:
+              logs_path: "/var/log/containers/"
+
+    output.logstash:
+      hosts: ["192.168.52.10:5044"]
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: filebeat
+  namespace: logging
+  labels:
+    k8s-app: filebeat
+spec:
+  selector:
+    matchLabels:
+      k8s-app: filebeat
+  template:
+    metadata:
+      labels:
+        k8s-app: filebeat
+    spec:
+      serviceAccountName: filebeat
+      terminationGracePeriodSeconds: 30
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+      - name: filebeat
+        image: docker.elastic.co/beats/filebeat:8.8.2
+        imagePullPolicy: Always
+        args: [
+          "-c", "/usr/share/filebeat/filebeat.yml",
+          "-e",
+        ]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          runAsUser: 0
+          # If using Red Hat OpenShift uncomment this:
+          #privileged: true
+        resources:
+          limits:
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/filebeat/filebeat.yml
+          readOnly: true
+          subPath: filebeat.yml
+        - name: data
+          mountPath: /usr/share/filebeat/data
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        - name: varlibdockercontainers
+          mountPath: /var/log/containers
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          defaultMode: 0640
+          name: filebeat-config
+      - name: data
+        hostPath:
+          path: /var/lib/filebeat-data
+          type: DirectoryOrCreate
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/log/containers

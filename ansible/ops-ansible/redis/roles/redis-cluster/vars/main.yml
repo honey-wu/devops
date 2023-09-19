@@ -1,0 +1,15 @@
+host: "redis"
+redis_version: "3.2.12"
+packages_path: "../files"
+download_path: "/software"
+redis_binary_install_dir: "/usr/local"
+redis_data_dir: "/data/redis"
+tar_directory_name: "redis-3.2.12"
+redis_port: [6379,6380,6381]
+redis_service_password: ['123456','vevor@123','wwq123']
+redis_maxmemory_bytes: "1073741824"
+redis_maxclients: "20000"
+redis_tcp_backlog: "2048"
+redis_sentinel_port: "26379"
+redis_sentinel_alias: ['test1','test2','test3']
+redis_port_alias_password: ['6379:test1:vevor@123','6380:test2:wwq_111','6381:test3:123456']

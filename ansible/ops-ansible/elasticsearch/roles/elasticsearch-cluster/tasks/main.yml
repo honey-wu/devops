@@ -1,0 +1,89 @@
+- name: Set a hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+- name: Add other nodes to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+    line: "{{ hostvars[item]['ansible_default_ipv4']['address'] }} {{ item }}"
+  with_items: "{{ groups['elasticsearch'] | difference(['inventory_hostname']) }}"
+- name: Create elasticsearch user
+  user:
+    name: "elasticsearch"
+    shell: "/sbin/nologin"
+    state: present
+
+- name: Ensure download_path exists.
+  file:
+    path: "{{ download_path }}"
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Copy the elasticsearch installation package
+  copy:
+    src: "{{ packages_path }}/elasticsearch-{{ elasticsearch_version }}.tar.gz"
+    dest: "{{ download_path }}"
+
+- name: Unpack elasticsearch binary
+  unarchive:
+    src: "{{ download_path }}/elasticsearch-{{ elasticsearch_version }}.tar.gz"
+    dest: "{{ elasticsearch_binary_install_dir }}"
+    owner: elasticsearch
+    group: elasticsearch
+    remote_src: yes
+
+- name: Propagate elasticsearch binaries
+  command: "mv {{ elasticsearch_binary_install_dir }}/{{ tar_directory_name }} {{ elasticsearch_binary_install_dir }}/elasticsearch"
+    
+- name: Ensure elasticsearch_data_path exists.
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+    owner: elasticsearch
+    group: elasticsearch
+  with_items:
+    - "{{ elasticsearch_data_dir }}/data"
+    - "{{ elasticsearch_data_dir }}/logs"
+    - "{{ elasticsearch_data_dir }}/repo-snapshot"
+
+- name: Modify elasticsearch jvm size
+  replace:
+    path: "{{ elasticsearch_binary_install_dir }}/elasticsearch/config/jvm.options"
+    regexp: '^(-Xm[sx]).*$'
+    replace: '\g<1>{{ es_start_jvm_heap_size }}'
+    backup: yes
+
+- name: Copy the elasticsearch.yml file
+  template:
+    src: elasticsearch.yml.j2
+    dest: "{{ elasticsearch_binary_install_dir }}/elasticsearch/config/elasticsearch.yml"
+    owner: elasticsearch
+    group: elasticsearch
+    mode: 0644
+    backup: yes
+    force: yes
+
+- name: Copy the elasticsearch.service systemd service file
+  template:
+    src: elasticsearch.service.j2
+    dest: /usr/lib/systemd/system/elasticsearch.service
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart elasticsearch
+
+- name: Install elasticsearch ik plugin
+  shell: "{{ elasticsearch_binary_install_dir }}/elasticsearch/bin/elasticsearch-plugin install https://github.com/medcl/elasticsearch-analysis-ik/releases/download/v{{ elasticsearch_version }}/elasticsearch-analysis-ik-{{ elasticsearch_version }}.zip"
+
+- name: Ensure elasticsearch service is enabled on boot
+  become: true
+  systemd:
+    daemon_reload: true
+    name: elasticsearch.service
+    enabled: true
+    state: started
+  when:
+    - not ansible_check_mode

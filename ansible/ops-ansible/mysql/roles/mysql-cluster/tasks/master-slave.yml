@@ -1,0 +1,132 @@
+- name: Make sure the MySQL service is running
+  service:
+    name: mysql
+    state: started
+ 
+- name: Set up the MySQL master server
+  set_fact:
+    mysql_master_ip: "{{ hostvars[item]['ansible_ssh_host'] }}"
+  when: hostvars[item]['identity'] == 'master'
+  with_items: "{{ groups[group_names.0] }}"
+
+- name: Set up the MySQL slave server
+  set_fact:
+    mysql_slave_ips: "{{ ansible_ssh_host }}"
+  when: identity == 'slave' and inventory_hostname in groups[group_names.0]
+
+- name: Get the master log file name and location
+  become: true
+  shell: "{{ mysql_binary_install_dir}}/mysql/bin/mysql -uroot -p'{{ mysql_new_root_password }}' -e 'show master status \\G' | grep -E 'File|Position'"
+  register: "master_status"
+  delegate_to: "{{ mysql_master_ip }}"
+  when: identity == 'master'
+
+#- name: backup master database
+#  become: true
+#  shell: "{{ mysql_binary_install_dir }}/mysql/bin/mysqldump -uroot -p'{{ mysql_new_root_password }}' --set-gtid-purged=OFF --all-databases > /root/all-databases.sql"
+#  delegate_to: "{{ mysql_master_ip }}"
+#  when: identity == 'master'
+- name: backup master databases
+  become: true
+  mysql_db:
+    login_unix_socket: "{{ mysql_socket_path }}"
+    login_host: "localhost"
+    login_user: "root"
+    login_password: "{{ mysql_new_root_password }}"
+    login_port: "{{ mysql_port }}"
+    state: "dump"
+    name: "all"
+    target: "/root/all-databases.sql"
+    dump_extra_args: "--set-gtid-purged=OFF"
+  delegate_to: "{{ mysql_master_ip }}"
+  when: identity == 'master'
+
+- name: Transfer the backup database to the local
+  become: true
+  fetch:
+    src: "/root/all-databases.sql"
+    dest: "/tmp/"
+    flat: yes
+  delegate_to: "{{ mysql_master_ip }}"
+  when: identity == 'master'
+
+- name: Transfer the backup database to the slave server
+  become: true
+  copy:
+    src: "/tmp/all-databases.sql"
+    dest: "/root/all-databases.sql"
+  when: identity == 'slave'
+
+- name: Restore database on the slave servers
+  become: true
+  shell: "{{ mysql_binary_install_dir}}/mysql/bin/mysql -u root -p{{ mysql_new_root_password }} < /root/all-databases.sql"
+  when: identity == 'slave' 
+
+- name: Create mysql master-slave replication account repl
+  become: true
+  mysql_user:
+    login_unix_socket: "{{ mysql_socket_path }}"
+    login_host: "localhost"
+    login_user: "root"
+    login_password: "{{ mysql_new_root_password }}"
+    login_port: "{{ mysql_port }}"
+    name: "{{ mysql_replication_username }}"
+    password: "{{ mysql_replication_password }}"
+    host: "{{ item }}"
+    priv: "{{ mysql_replication_priv }}"
+    state: present
+  delegate_to: "{{ mysql_master_ip }}"
+  with_items: "{{ groups[group_names.0] | map('extract', hostvars, ['ansible_ssh_host']) | join(',') | split(',') }}"
+  when: identity == 'master'
+
+- name: Set the master-slave relationship
+  become: true
+  mysql_replication:
+    login_unix_socket: "{{ mysql_socket_path }}"
+    login_host: "localhost"
+    login_user: "root"
+    login_password: "{{ mysql_new_root_password }}"
+    login_port: "{{ mysql_port }}"
+    mode: "changeprimary"
+    primary_host: "{{ mysql_master_ip }}"
+    primary_user: "{{ mysql_replication_username }}"
+    primary_password: "{{ mysql_replication_password }}"
+    primary_port: "{{ mysql_port }}"
+    primary_auto_position: 1
+  when: identity == 'slave'
+
+- name: Start master-slave replication
+  become: true
+  mysql_replication:
+    login_unix_socket: "{{ mysql_socket_path }}"
+    login_host: "localhost"
+    login_user: "root"
+    login_password: "{{ mysql_new_root_password }}"
+    login_port: "{{ mysql_port }}"
+    mode: "startreplica"
+  when: identity == 'slave'
+
+- name: Start MySQL service on the slave servers
+  become: true
+  mysql_replication:
+    login_unix_socket: "{{ mysql_socket_path }}"
+    login_host: "localhost"
+    login_user: "root"
+    login_password: "{{ mysql_new_root_password }}"
+    login_port: "{{ mysql_port }}"
+    mode: "getreplica"
+  when: identity == 'slave'
+
+- name: create adminroot user
+  mysql_user:
+    login_unix_socket: "{{ mysql_socket_path }}"
+    login_host: "localhost"
+    login_user: "root"
+    login_password: "{{ mysql_new_root_password }}"
+    login_port: "{{ mysql_port }}"
+    name: "{{ mysql_new_adminroot_username }}"
+    password: "{{ mysql_new_adminroot_password }}"
+    host: "{{ mysql_new_adminroot_host }}"
+    priv: "{{ mysql_new_adminroot_priv }}"
+    state: "present"
+  when: identity == 'master'

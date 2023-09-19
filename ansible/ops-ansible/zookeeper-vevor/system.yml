@@ -1,0 +1,30 @@
+- hosts: mid
+  remote_user: root
+  tasks:
+    - name: Set limits file
+      pam_limits:
+        dest: "{{ item.dest }}"
+        domain: '*'
+        limit_type: "{{ item.limit_type }}"
+        limit_item: "{{ item.limit_item }}"
+        value: "{{ item.value }}"
+      with_items:
+        - { dest: '/etc/security/limits.conf', limit_type: 'soft', limit_item: 'nofile', value: '200000' }
+        - { dest: '/etc/security/limits.conf', limit_type: 'hard', limit_item: 'nofile', value: '200000'}
+      tags:
+        - setlimits
+
+    - name: Set sysctl file
+      sysctl:
+        name: "{{ item.sysctl_type }}"
+        value: "{{ item.value }}"
+        sysctl_file: "{{ item.dest }}"
+      with_items:
+        - { dest: '/etc/sysctl.conf', sysctl_type: 'vm.swappiness', value: '0' }
+        - { dest: '/etc/sysctl.conf', sysctl_type: 'fs.file-max', value: '200000' }
+        - { dest: '/etc/sysctl.conf', sysctl_type: 'net.ipv4.ip_local_port_range', value: '1024 65500' }
+        - { dest: '/etc/sysctl.conf', sysctl_type: 'net.ipv4.tcp_syncookies', value: '1' }
+        - { dest: '/etc/sysctl.conf', sysctl_type: 'net.ipv4.tcp_max_syn_backlog', value: '32768' }
+        - { dest: '/etc/sysctl.conf', sysctl_type: 'net.core.somaxconn', value: '32768' }
+      tags:
+        - setsysctl
