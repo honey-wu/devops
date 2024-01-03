@@ -6,7 +6,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: prometheus.test.com
+  - host: prometheus.kai-inner.com
     http:
       paths:
       - path: /
@@ -16,7 +16,7 @@ spec:
             name: prometheus-k8s
             port:
               number: 9090
-  - host: grafana.test.com
+  - host: grafana.kai-inner.com
     http:
       paths:
       - path: /
@@ -26,3 +26,13 @@ spec:
             name: grafana
             port:
               number: 3000
+  - host: alertmanager.kai-inner.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: alertmanager-main
+            port:
+              number: 9093

@@ -1,0 +1,40 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/component: kafka
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/part-of: kube-prometheus
+    app.kubernetes.io/version: 3.5.0
+    prometheus: k8s
+    role: alert-rules
+  name: kafka-prometheus-rules
+  namespace: monitoring
+spec:
+  groups:
+  - name: kafka.rules
+    rules:
+    - alert: KafkaTopicsReplicas
+      expr: count(kafka_topic_partition_in_sync_replica) by (topic) - sum(kafka_topic_partition_in_sync_replica) by (topic) > 0
+      for: 0m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Kafka topics replicas (instance {{ $labels.instance }})"
+        description: "Kafka topic in-sync partition\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: KafkaConsumersGroupLag
+      expr: sum(kafka_consumergroup_lag) by (consumergroup) > 50
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Kafka consumers group (instance {{ $labels.instance }})"
+        description: "Kafka consumers group\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: KafkaMemberMissing
+      expr: count without (instance, job) (kafka_broker_info) - sum without (instance, job) (kafka_broker_info) > 0
+      for: 3m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Kafka cluster member (instance {{ $labels.instance }})"
+        description: "Kafka cluster broker member missing\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

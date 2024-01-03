@@ -1,0 +1,84 @@
+# global configuration
+
+
+# prometheus monitor
+- job_name: "prometheus"
+  static_configs:
+    - targets: ["localhost:9090"]
+
+# host monitor
+- job_name: "node-exporter"
+  static_configs:
+    - targets:
+      - 172.25.26.141:9100
+      - 172.25.27.157:9100
+      - 172.25.26.87:9100
+      - 172.25.26.238:9100
+      - 172.25.27.79:9100
+      - 172.25.26.83:9100
+        #- 172.25.26.73:9100
+        #- 172.25.27.223:9100
+      - 172.25.26.46:9100
+      labels:
+        role: hosts
+
+# config for the multiple redis cluster targets that the exporter will scrape
+- job_name: 'redis_exporter_targets'
+  file_sd_configs:
+    - files:
+      - /tmp/redis-instances-targets.json
+  metrics_path: /scrape
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: redis-exporter-svc:9121
+
+# config for scraping the exporter itself
+- job_name: 'redis_exporter'
+  static_configs:
+    - targets:
+      - redis-exporter-svc:9121
+
+# etcd cluster monitor
+- job_name: "etcd-exporter"
+  static_configs:
+    - targets: ['172.25.26.238:12379','172.25.27.79:12379','172.25.26.83:12379']
+      labels:
+        cluster_name: etcd
+
+# nocos cluster monitor
+- job_name: "nacos-exporter"
+  metrics_path: "/nacos/actuator/prometheus"
+  static_configs:
+    - targets: ['172.25.26.238:8848','172.25.27.79:8848','172.25.26.83:8848']
+      labels:
+        cluster_name: nacos
+
+# kafka cluster monitor
+- job_name: "kafka-exporter-targets"
+  static_configs:
+    - targets:
+      - kafka-exporter-svc:9308
+      labels:
+        cluster_name: kafka
+
+# kafka-zookeeper cluster monitor
+#- job_name: "zookeeper-exporter-targets"
+#  static_configs:
+#    - targets:
+#      - zookeeper-exporter-svc:9141
+#      labels:
+#        cluster_name: kafka-zk
+
+# mysql master-slaves monitor
+- job_name: "mysqld-exporter"
+  static_configs:
+    - targets: ['172.25.26.73:9100','172.25.26.73:9104']
+      labels:
+        db_role: binary_mysql_master
+    - targets: ['172.25.27.223:9100','172.25.27.223:9104']
+      labels:
+        db_role: binary_mysql_slave

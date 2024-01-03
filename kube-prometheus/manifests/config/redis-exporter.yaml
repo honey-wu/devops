@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-exporter-svc
+  namespace: monitoring
+spec:
+  selector:
+    app: redis-exporter
+  ports:
+  - name: http-metric
+    protocol: TCP
+    port: 9121
+    targetPort: 9121
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: redis-exporter
+  name: redis-exporter
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-exporter
+  template:
+    metadata:
+      labels:
+        app: redis-exporter
+    spec:
+      containers:
+      - name: redis-exporter
+        image: oliver006/redis_exporter:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/redis_exporter"]
+        args:
+        - --redis.password-file=/tmp/redis-pwd-file.json
+        - --include-system-metrics=true
+        - --is-cluster
+        ports:
+        - name: http-metric
+          containerPort: 9121
+        env:
+          - name: REDIS_PASSWORD_FILE
+            value: /tmp/redis-pwd-file.json
+        volumeMounts:
+          - name: redis-pwd-file
+            mountPath: /tmp/redis-pwd-file.json
+            subPath: redis-pwd-file.json
+        securityContext:
+          privileged: false
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      volumes:
+        - name: redis-pwd-file
+          configMap:
+            name: redis-pwd-file
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30

@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-client-provisioner
+  labels:
+    app: nfs-client-provisioner
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nfs-client-provisioner
+  template:
+    metadata:
+      labels:
+        app: nfs-client-provisioner
+    spec:
+      serviceAccountName: nfs-client-provisioner
+      containers:
+        - name: nfs-client-provisioner
+          image: registry.k8s.io/sig-storage/nfs-subdir-external-provisioner:v4.0.2
+          volumeMounts:
+            - name: nfs-client-root
+              mountPath: /persistentvolumes
+          env:
+            - name: PROVISIONER_NAME    ### 存储分配器名称,这个名字必须与storageclass里面的名字一致，不然storageclass找不到provisioner
+              value: nfs-external-provisioner
+            - name: ENABLE_LEADER_ELECTION         ###设置高可用允许选举，如果replicas参数等于1，那这个参数可以不用配置
+              value: "true"
+            - name: NFS_SERVER
+              value: 192.168.52.16       ###修改nfsserver地址为：192.168.52.16
+            - name: NFS_PATH
+              value: /data/prometheus_nfs      ###修改共享地址：/data/prometheus_nfs
+      volumes:
+        - name: nfs-client-root
+          nfs:
+            server: 192.168.52.16        ###修改nfsserver地址为：192.168.52.16
+            path: /data/prometheus_nfs         ###修改共享地址：/data/prometheus_nfs

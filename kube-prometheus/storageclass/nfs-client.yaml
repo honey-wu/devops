@@ -1,0 +1,10 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-client
+provisioner: nfs-external-provisioner         ### 配置与PROVISIONER_NAME相同的名字
+parameters:
+  archiveOnDelete: "false"                    ## 资源删除策略，“true”表示删除PVC时，同时删除绑定的PV
+  pathPattern: "${.PVC.namespace}/${.PVC.name}"         ###支持NFS创建子目录，用于不同应用使用NFS的不同目录
+reclaimPolicy: Delete
+allowVolumeExpansion: true                    ### 允许pvc创建后扩容

@@ -1,0 +1,125 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/component: mysql
+    app.kubernetes.io/name: mysql
+    app.kubernetes.io/part-of: kube-prometheus
+    app.kubernetes.io/version: 8.0.34
+    prometheus: k8s
+    role: alert-rules
+  name: mysql-prometheus-rules
+  namespace: monitoring
+spec:
+  groups:
+  - name: mysql.rules
+    rules:
+    - alert: MysqlDown
+      expr: mysql_up == 0
+      for: 0m
+      labels:
+        severity: critical
+      annotations:
+        summary: MySQL down (instance {{ $labels.instance }})
+        description: "MySQL instance is down on {{ $labels.instance }}\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlRestarted
+      expr: mysql_global_status_uptime < 60
+      for: 0m
+      labels:
+        severity: info
+      annotations:
+        summary: MySQL restarted (instance {{ $labels.instance }})
+        description: "MySQL has just been restarted, less than one minute ago on {{ $labels.instance }}.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlTooManyConnections(>80%)
+      expr: max_over_time(mysql_global_status_threads_connected[1m]) / mysql_global_variables_max_connections * 100 > 80
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: MySQL too many connections (> 80%) (instance {{ $labels.instance }})
+        description: "More than 80% of MySQL connections are in use on {{ $labels.instance }}\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlHighThreadsRunning
+      expr: max_over_time(mysql_global_status_threads_running[1m]) / mysql_global_variables_max_connections * 100 > 60
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: MySQL high threads running (instance {{ $labels.instance }})
+        description: "More than 60% of MySQL connections are in running state on {{ $labels.instance }}\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlSlaveIoThreadNotRunning
+      #expr: mysql_slave_status_slave_io_running != 1
+      expr: ( mysql_slave_status_slave_io_running and ON (instance) mysql_slave_status_master_server_id > 0 ) == 0
+      for: 0m
+      labels:
+        severity: critical
+      annotations:
+        summary: MySQL Slave IO thread not running (instance {{ $labels.instance }})
+        description: "MySQL Slave IO thread not running on {{ $labels.instance }}\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlSlaveSqlThreadNotRunning
+      #expr: mysql_slave_status_slave_sql_running == 0
+      expr: ( mysql_slave_status_slave_sql_running and ON (instance) mysql_slave_status_master_server_id > 0) == 0
+      for: 0m
+      labels:
+        severity: critical
+      annotations:
+        summary: MySQL Slave SQL thread not running (instance {{ $labels.instance }})
+        description: "MySQL Slave SQL thread not running on {{ $labels.instance }}\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlSlaveReplicationLag
+      #expr: rate(mysql_slave_status_seconds_behind_master[1m]) >30
+      expr: ( (mysql_slave_status_seconds_behind_master - mysql_slave_status_sql_delay) and ON (instance) mysql_slave_status_master_server_id > 0 ) > 30
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: MySQL Slave lagging behind Master (instance {{ $labels.instance }})
+        description: "MySQL Slave lagging behind Master {{ $labels.instance }}\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlSlaveReplicationLag
+      #expr: rate(mysql_slave_status_seconds_behind_master[1m]) >60
+      expr: ( (mysql_slave_status_seconds_behind_master - mysql_slave_status_sql_delay) and ON (instance) mysql_slave_status_master_server_id > 0 ) > 60
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: MySQL Slave lagging behind Master (instance {{ $labels.instance }})
+        description: "MySQL Slave lagging behind Master {{ $labels.instance }}\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlSlowQueries
+      #expr: rate(mysql_global_status_slow_queries[5m])>3
+      expr: increase(mysql_global_status_slow_queries[1m]) > 0
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: MySQL slow queries (instance {{ $labels.instance }})
+        description: "MySQL server mysql has some new slow query.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlInnodbLogWaits
+      expr: rate(mysql_global_status_innodb_log_waits[15m]) > 10
+      for: 0m
+      labels:
+        severity: warning
+      annotations:
+        summary: MySQL InnoDB log waits (instance {{ $labels.instance }})
+        description: "MySQL innodb log writes stalling\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlOpenFilesTooHigh
+      expr: mysql_global_status_innodb_num_open_files > (mysql_global_variables_open_files_limit) * 0.75
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: Mysql open files too high (instance {{ $labels.instance }})
+        description: "Mysql open files too high (> 65535 * 0.75 )\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlOutOfMaxAllowPacket
+      expr: mysql_global_variables_read_buffer_size > mysql_global_variables_slave_max_allowed_packet
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: Read buffer size is bigger than max. allowed packet size (instance {{ $labels.instance }})
+        description: "Read buffer size is bigger than max. allowed packet size \n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    - alert: MysqlSlaveNotReadonly
+      expr: sum(mysql_global_variables_read_only != 1) by (instance) and sum(mysql_slave_status_slave_io_running) by (instance)
+      for: 0m
+      labels:
+        severity: warning
+      annotations:
+        summary: Mysql Slave is NOT read only (instance {{ $labels.instance }})
+        description: "Mysql Slave is NOT read only \n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

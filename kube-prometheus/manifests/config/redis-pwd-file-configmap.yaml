@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-pwd-file
+  namespace: monitoring
+data:
+  redis-pwd-file.json: |
+    {
+        "redis://172.25.26.141:6380": "2m4HcYfdiFa0jCG2",
+        "redis://172.25.26.141:6381": "2m4HcYfdiFa0jCG2",
+        "redis://172.25.27.157:6380": "2m4HcYfdiFa0jCG2",
+        "redis://172.25.27.157:6381": "2m4HcYfdiFa0jCG2",
+        "redis://172.25.26.87:6380": "2m4HcYfdiFa0jCG2",
+        "redis://172.25.26.87:6381": "2m4HcYfdiFa0jCG2"
+    }

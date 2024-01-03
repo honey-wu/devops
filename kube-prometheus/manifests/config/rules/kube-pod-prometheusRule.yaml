@@ -1,0 +1,47 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/name: pod
+    app.kubernetes.io/part-of: pod
+    prometheus: k8s
+    role: alert-rules
+  name: pod-monitoring-rules
+  namespace: monitoring
+spec:
+  groups:
+  - name: kubernetes-pods
+    rules:
+    - alert: KubePodRestart
+      expr: sum (increase (kube_pod_container_status_restarts_total{namespace="bitchat"}[2m])) by (namespace,pod) > 0
+      for: 0m
+      labels:
+        severity: warning
+      annotations:
+        summary: Pod has been restart ({{ $labels.namespace }}/{{ $labels.pod }}).
+        description: Pod has been restart ({{ $labels.namespace }}/{{ $labels.pod }}).
+    - alert: KubePodEvicted
+      expr: sum(kube_pod_status_reason{namespace="bitchat",reason="Evicted"}) by (namespace,pod) == 1
+      for: 0m
+      labels:
+        severity: warning
+      annotations:
+        summary: Pod has been Evicted ({{ $labels.namespace }}/{{ $labels.pod }}).
+        description: Pod has been Evicted ({{ $labels.namespace }}/{{ $labels.pod }}).
+    - alert: KubePodCpuUsageTooHigh
+      expr: 100 * (sum(rate(container_cpu_usage_seconds_total{container!~"|POD",namespace!="monitoring"}[1m])) by (namespace,pod) / sum(kube_pod_container_resource_limits{resource="cpu",namespace!="monitoring"}) by (namespace,pod)) > 80
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: Pod CPU resource usage too high ({{ $labels.namespace }}/{{ $labels.pod }}).
+        description: Pod CPU resource usage is over resource limits 80%\n  VALUE = {{ $value }}\n ({{ $labels.namespace }}/{{ $labels.pod }}).
+    - alert: KubePodMemoryUsageTooHigh
+      #expr: 100 * (sum(container_memory_working_set_bytes{container!~"|POD",namespace!="monitoring"}) by (namespace,pod) / sum(kube_pod_container_resource_limits{resource="memory",namespace!="monitoring"}) by (namespace,pod)) > 85
+      expr: 100 * (sum(container_memory_working_set_bytes{container!~"|POD",namespace!="monitoring"}) by (namespace,pod) / sum(kube_pod_container_resource_limits{resource="memory",namespace!="monitoring"}) by (namespace,pod)) > 85
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: Pod memory resource usage too high ({{ $labels.namespace }}/{{ $labels.pod }}).
+        description: Pod memory resource usage is over resource limits 85%\n  VALUE = {{ $value }}\n ({{ $labels.namespace }}/{{ $labels.pod }}).

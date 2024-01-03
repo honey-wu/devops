@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/instance: k8s
     app.kubernetes.io/name: prometheus
     app.kubernetes.io/part-of: kube-prometheus
-    app.kubernetes.io/version: 2.46.0
+    app.kubernetes.io/version: 2.48.1
   name: k8s
   namespace: monitoring
 spec:
@@ -16,18 +16,9 @@ spec:
       name: alertmanager-main
       namespace: monitoring
       port: web
-  storage:
-    volumeClaimTemplate:
-      spec:
-        storageClassName: nfs-storage-class
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 20Gi
-  retention: 15d
   enableFeatures: []
   externalLabels: {}
-  image: quay.io/prometheus/prometheus:v2.46.0
+  image: quay.io/prometheus/prometheus:v2.48.1
   nodeSelector:
     kubernetes.io/os: linux
   podMetadata:
@@ -36,7 +27,7 @@ spec:
       app.kubernetes.io/instance: k8s
       app.kubernetes.io/name: prometheus
       app.kubernetes.io/part-of: kube-prometheus
-      app.kubernetes.io/version: 2.46.0
+      app.kubernetes.io/version: 2.48.1
   podMonitorNamespaceSelector: {}
   podMonitorSelector: {}
   probeNamespaceSelector: {}
@@ -47,11 +38,34 @@ spec:
       memory: 400Mi
   ruleNamespaceSelector: {}
   ruleSelector: {}
+  scrapeConfigNamespaceSelector: {}
+  scrapeConfigSelector: {}
   securityContext:
     fsGroup: 2000
     runAsNonRoot: true
     runAsUser: 1000
+  volumeMounts:
+    - name: redis-instances-targets
+      mountPath: /tmp/redis-instances-targets.json
+      subPath: redis-instances-targets.json
+  volumes:
+    - name: redis-instances-targets
+      configMap:
+        name: redis-instances-targets
   serviceAccountName: prometheus-k8s
   serviceMonitorNamespaceSelector: {}
   serviceMonitorSelector: {}
-  version: 2.46.0
+  version: 2.48.1
+  additionalScrapeConfigs:
+    name: additional-scrape-configs
+    key: prometheus-additional.yaml
+  retention: 15d
+  storage:
+    volumeClaimTemplate:         
+      spec:
+        storageClassName: nfs-client
+        accessModes:
+        -  ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Gi
