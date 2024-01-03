@@ -32,9 +32,9 @@ spec:
         imagePullPolicy: IfNotPresent
         image: danielqsj/kafka-exporter:latest
         args:
-          - --kafka.server=172.25.26.141:9092
-          - --kafka.server=172.25.27.157:9092
-          - --kafka.server=172.25.26.87:9092
+          - --kafka.server=192.168.26.141:9092
+          - --kafka.server=192.168.27.157:9092
+          - --kafka.server=192.168.26.87:9092
         ports:
         - name: http-metrics
           containerPort: 9308

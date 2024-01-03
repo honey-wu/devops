@@ -34,7 +34,7 @@ spec:
         image: dabealu/zookeeper-exporter:v0.1.13
         imagePullPolicy: IfNotPresent
         args:
-        - --zk-hosts="172.25.26.141:2181,172.25.27.157:2181,172.25.26.87:2181"
+        - --zk-hosts="192.168.26.141:2181,192.168.27.157:2181,192.168.26.87:2181"
         ports:
         - name: http-metrics
           containerPort: 9141
